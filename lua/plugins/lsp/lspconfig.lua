@@ -19,12 +19,8 @@ return {
                 opts.desc = "Go to declaration"
                 vim.keymap.set("n", "gD", vim.lsp.buf.declaration, opts)
 
-                opts.desc = "Go to definition in vertical split"
-                vim.keymap.set("n", "gd", function()
-                    require("telescope.builtin").lsp_definitions({
-                        jump_type = "vsplit",
-                    })
-                end, opts)
+                opts.desc = "Show LSP definitions"
+                vim.keymap.set("n", "gd", "<cmd>Telescope lsp_definitions<CR>", opts)
 
                 opts.desc = "Show LSP implementations"
                 vim.keymap.set("n", "gi", "<cmd>Telescope lsp_implementations<CR>", opts)
@@ -69,7 +65,7 @@ return {
 
         -- update diagnostic config function
         vim.diagnostic.config({
-            signs = { text = false },
+            signs = { text = signs },
             virtual_text = true,
             underline = true,  -- Always on
             update_in_insert = true,
@@ -228,29 +224,29 @@ return {
 
         -- css
         vim.lsp.config("cssls", {
-            filetypes = { "css", "scss", "less" },
-            init_options = { provideFormatter = true },
-            single_file_support = true,
-            settings = {
-                css = {
-                    lint = {
-                        unknownAtRules = "ignore",
-                    },
-                    validate = true
-                },
-                scss = {
-                    lint = {
-                        unknownAtRules = "ignore"
-                    },
-                    validate = true
-                },
-                less = {
-                    lint = {
-                        unknownAtRules = "ignore"
-                    },
-                    validate = true
-                },
+          filetypes = { "css", "scss", "less" },
+          init_options = { provideFormatter = true },
+          single_file_support = true,
+          settings = {
+            css = {
+              lint = {
+                unknownAtRules = "ignore",
+              },
+              validate = true
             },
+            scss = {
+              lint = {
+                unknownAtRules = "ignore"
+              },
+              validate = true
+            },
+            less = {
+              lint = {
+                unknownAtRules = "ignore"
+              },
+              validate = true
+            },
+          },
         })
 
         -- tailwind
@@ -283,11 +279,18 @@ return {
                 }
             },
         })
-        -- clangd (C/C++)
-        vim.lsp.config("clangd", {
-            cmd = {
-                "clangd",
-                "--query-driver=C:/msys64/ucrt64/bin/g++.exe",
+        -- Python: Pyright
+        vim.lsp.config("pyright", {
+            capabilities = capabilities,
+            settings = {
+                python = {
+                    analysis = {
+                        autoSearchPaths = true,
+                        useLibraryCodeForTypes = true,
+                        diagnosticMode = "openFilesOnly",
+                        typeCheckingMode = "standard",
+                    },
+                },
             },
         })
         -- Instead of using mason enable all configured LSP via `automatic_enable=true`
@@ -303,8 +306,7 @@ return {
             "astro",
             "tailwindcss",
             "marksman",
-            "clangd",
+            "pyright",
         })
     end,
 }
-

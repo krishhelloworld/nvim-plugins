@@ -1,117 +1,56 @@
--- ========================================
--- Neovim Configuration
--- ========================================
+vim.env.CC = "gcc"
 
--- Leader key
-vim.g.mapleader = " "
-vim.g.maplocalleader = " "
+require("krish.core")
+require("krish.lazy")
+vim.cmd.colorscheme("tokyonight")
+vim.g.python3_host_prog = "C:\\Users\\gupta\\AppData\\Local\\Python\\bin\\python.exe"
+vim.opt.autochdir = true
 
+vim.opt.wrap = true
+vim.opt.linebreak = true
+vim.opt.breakindent = true
+vim.opt.showbreak = "↳ "
+vim.keymap.set("n", "<Esc>", "<cmd>nohlsearch<CR>", { desc = "Clear search highlights" })
+vim.keymap.set("t", "<Esc>", [[<C-\><C-n>]], { noremap = true })
+vim.keymap.set("t", "<C-h>", [[<C-\><C-n><C-w>h]], { silent = true })
+vim.keymap.set("t", "<C-j>", [[<C-\><C-n><C-w>j]], { silent = true })
+vim.keymap.set("t", "<C-k>", [[<C-\><C-n><C-w>k]], { silent = true })
+vim.keymap.set("t", "<C-l>", [[<C-\><C-n><C-w>l]], { silent = true })
 
--- Line numbers
-vim.opt.number = true
-vim.opt.relativenumber = true
+vim.keymap.set("n", "<A-x>", function()
+	local current = vim.api.nvim_get_current_buf()
+	vim.cmd("bnext")
+	vim.cmd("bdelete " .. current)
+end, { desc = "Delete buffer and switch to next" })
+vim.keymap.set("n", "<M-9>", ":bn<CR>", { desc = "Next buffer" })
+vim.keymap.set("n", "<M-0>", ":bp<CR>", { desc = "Previous buffer" }) -- Don't show mode twice
+vim.keymap.set("n", "g==G", function()
+	require("conform").format({
+		async = false,
+		timeout_ms = 2000,
+	})
+end, { desc = "Format with Conform" })
+-- vim.keymap.set({ "n", "t" }, "<C-\\>", toggle_terminal, {
+-- 	desc = "Toggle Terminal in Current Directory",
+-- })
+local terminal_buf = nil
+local terminal_win = nil
 
--- Indentation
-vim.opt.expandtab = true
-vim.opt.shiftwidth = 4
-vim.opt.tabstop = 4
-vim.opt.smartindent = true
+function toggle_terminal()
+	if terminal_win and vim.api.nvim_win_is_valid(terminal_win) then
+		vim.api.nvim_win_close(terminal_win, true)
+		terminal_win = nil
+		return
+	end
 
--- Search
-vim.opt.ignorecase = true
-vim.opt.smartcase = true
+	if terminal_buf and vim.api.nvim_buf_is_valid(terminal_buf) then
+		vim.cmd("botright split")
+		vim.api.nvim_win_set_buf(0, terminal_buf)
+	else
+		vim.cmd("botright split | terminal")
+		terminal_buf = vim.api.nvim_get_current_buf()
+	end
 
--- UI
-vim.opt.termguicolors = true
-vim.opt.cursorline = true
-vim.opt.signcolumn = "yes"
-
--- Better editing
-vim.opt.mouse = "a"
-vim.opt.clipboard = "unnamedplus"
--- Go to definition
-vim.keymap.set("n", "gd", vim.lsp.buf.definition, { desc = "Go to definition" })
-
--- Find references
-vim.keymap.set("n", "gr", vim.lsp.buf.references, { desc = "Find references" })
-
--- Show documentation/type information
-vim.keymap.set("n", "K", vim.lsp.buf.hover, { desc = "Show documentation" })
-
--- REFRESH THE PAGE OF FILES
-vim.opt.autoread = true
-
-
-vim.keymap.set("n", "<F6>", function()
-    vim.cmd("w")
-
-    local file = vim.fn.expand("%:p")
-    local dir = vim.fn.expand("%:p:h")
-    local exe = vim.fn.expand("%:p:r") .. ".exe"
-    local input = dir .. "/input.txt"
-
-    local cmd = "g++ "
-        .. vim.fn.shellescape(file)
-        .. " -o "
-        .. vim.fn.shellescape(exe)
-        .. " && "
-
-    if vim.fn.filereadable(input) == 1 then
-        cmd = cmd
-            .. vim.fn.shellescape(exe)
-            .. " < "
-            .. vim.fn.shellescape(input)
-    else
-        cmd = cmd .. vim.fn.shellescape(exe)
-    end
-
-    require("toggleterm").exec(cmd, 12, nil, "horizontal")
-end, {
-    desc = "Compile and Run C++",
-})
-
--- AUTOMATICALLY  OPEN THE RECENT CLOSED SESSIONS
-vim.keymap.set("n", "<leader>ss", ":mksession! mysession.vim<CR>")
-vim.keymap.set("n", "<leader>sr", ":source mysession.vim<CR>")
-vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter" }, {
-  command = "checktime",
-})
-
-
--- Switch between buffers 
-vim.keymap.set("n", "<leader>bn", ":enew<CR>")
-vim.keymap.set("n", "<leader>bd", ":bd<CR>")
-vim.keymap.set("n", "<leader>,", ":bn<CR>", { desc = "Next buffer" })
-vim.keymap.set("n", "<leader>.", ":bp<CR>", { desc = "Previous buffer" })-- Don't show mode twice
-
-
--- AUTOSESSIONS  
-vim.api.nvim_create_user_command("Ar", "AutoSession restore", {})
-vim.api.nvim_create_user_command("As", "AutoSession search", {})
-
-vim.opt.showmode = false
--- vim keymap for back to editing to file manager 
--- vim.keymap.set("n", "-", "")
--- ========================================
--- Plugin Manager: lazy.nvim
--- ========================================
-
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-
-if not vim.loop.fs_stat(lazypath) then
-    vim.fn.system({
-        "git",
-        "clone",
-        "--filter=blob:none",
-        "https://github.com/folke/lazy.nvim.git",
-        "--branch=stable",
-        lazypath,
-    })
+	terminal_win = vim.api.nvim_get_current_win()
+	vim.cmd("startinsert")
 end
-
-vim.opt.rtp:prepend(lazypath)
-
-
-require("lazy").setup({
-    { import = "plugins" },
-})

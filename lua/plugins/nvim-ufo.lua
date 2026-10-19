@@ -1,4 +1,3 @@
-
 return {
     -- Setup Folding with nvim-ufo
     {

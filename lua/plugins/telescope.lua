@@ -1,106 +1,50 @@
 return {
-    "nvim-telescope/telescope.nvim",
+	"nvim-telescope/telescope.nvim",
+	branch = "master", -- using master to fix issues with deprecated to definition warnings 
+    -- '0.1.x' for stable ver.
+	dependencies = {
+		"nvim-lua/plenary.nvim",
+		{ "nvim-telescope/telescope-fzf-native.nvim", build = "make" },
+		"nvim-tree/nvim-web-devicons",
+		"andrew-george/telescope-themes",
+	},
+	config = function()
+		local telescope = require("telescope")
+		local actions = require("telescope.actions")
+		local builtin = require("telescope.builtin")
 
-    dependencies = {
-        "nvim-lua/plenary.nvim",
-    },
+		telescope.load_extension("fzf")
+		telescope.load_extension("themes")
 
-    config = function()
-        local telescope = require("telescope")
-        local builtin = require("telescope.builtin")
+		telescope.setup({
+			defaults = {
+				path_display = { "smart" },
+				mappings = {
+					i = {
+						["<C-k>"] = actions.move_selection_previous,
+						["<C-j>"] = actions.move_selection_next,
+					},
+				},
+			},
+			extensions = {
+				themes = {
+					enable_previewer = true,
+					enable_live_preview = true,
+					persist = {
+						enabled = true,
+						path = vim.fn.stdpath("config") .. "/lua/colorscheme.lua",
+					},
+				},
+			},
+		})
 
-        telescope.setup({
-            defaults = {
-                file_ignore_patterns = {
-                    "%.git/",
-                    "node_modules/",
-                    "%.bun/",
-                    "dist/",
-                    "build/",
-                    "target/",
-                    "__pycache__/",
-                    "%.venv/",
-                    "venv/",
-                    "%.cache/",
-                },
-            },
+		-- Keymaps
+		vim.keymap.set("n", "<leader>pr", "<cmd>Telescope oldfiles<CR>", { desc = "Fuzzy find recent files" })
+		vim.keymap.set("n", "<leader>pWs", function()
+			local word = vim.fn.expand("<cWORD>")
+			builtin.grep_string({ search = word })
+		end, { desc = "Find Connected Words under cursor" })
 
-            pickers = {
-                find_files = {
-                    hidden = false,
-                },
-
-                live_grep = {
-                    additional_args = function()
-                        return {
-                            "--glob",
-                            "!**/.git/**",
-                            "--glob",
-                            "!**/node_modules/**",
-                            "--glob",
-                            "!**/.bun/**",
-                            "--glob",
-                            "!**/dist/**",
-                            "--glob",
-                            "!**/build/**",
-                            "--glob",
-                            "!**/target/**",
-                            "--glob",
-                            "!**/__pycache__/**",
-                            "--glob",
-                            "!**/.venv/**",
-                            "--glob",
-                            "!**/venv/**",
-                            "--glob",
-                            "!**/.cache/**",
-                        }
-                    end,
-                },
-            },
-        })
-
-        vim.keymap.set("n", "<leader>fd", function()
-            builtin.find_files({
-                find_command = {
-                    "fd",
-                    "--type",
-                    "d",
-                    "--hidden",
-                    "--exclude",
-                    ".git",
-                    "--exclude",
-                    "node_modules",
-                    "--exclude",
-                    ".bun",
-                    "--exclude",
-                    "build",
-                    "--exclude",
-                    "dist",
-                    "--exclude",
-                    "target",
-                    "--exclude",
-                    "__pycache__",
-                    "--exclude",
-                    ".venv",
-                },
-            })
-        end, {
-            desc = "Find Directories",
-        })
-
-vim.keymap.set("n", "<leader>ff", function()
-    local oil = require("oil")
-    local cwd = oil.get_current_dir()
-
-    builtin.find_files({
-        cwd = cwd,
-    })
-end, {
-    desc = "Find Files",
-})
-
-        vim.keymap.set("n", "<leader>fg", builtin.live_grep, {
-            desc = "Search Text",
-        })
+		vim.keymap.set("n", "<leader>ths", "<cmd>Telescope themes<CR>", { noremap = true, silent = true, desc = "Theme Switcher" })
     end,
 }
