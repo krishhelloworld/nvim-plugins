@@ -1,0 +1,600 @@
+local set = vim.opt_local
+
+set.textwidth = 80 -- move text to new line at 80 characters
+set.spell = true -- Enable spell checking
+set.linebreak = true
+set.formatoptions:append("t")
+set.smartindent = false
+
+-- Markdown-only gx: open local links inside Neovim and jump to headings.
+-- Other filetypes keep their existing gx behavior.
+
+local function heading_slug(text)
+	text = text:lower()
+	text = text:gsub("`([^`]*)`", "%1")
+	text = text:gsub("<.->", "")
+	text = text:gsub("%b[]", function(s)
+		return s:match("%[(.*)%]") or s
+	end)
+	text = text:gsub("%s+#+%s*$", "")
+	text = text:gsub("[^%w%s%-]", "")
+	text = text:gsub("%s+", "-")
+	return text:gsub("%-+", "-"):gsub("^%-", ""):gsub("%-$", "")
+end
+
+local function markdown_gx()
+	local line = vim.api.nvim_get_current_line()
+	local col = vim.api.nvim_win_get_cursor(0)[2] + 1
+	local from = 1
+
+	-- Find an inline Markdown link containing the cursor.
+	while true do
+		local s, e, _, target = line:find("%[([^%]]-)%]%(([^%)]+)%)", from)
+
+		if not s then
+			break
+		end
+
+		if col >= s and col <= e then
+			target = target:gsub("^%s+", ""):gsub("%s+$", "")
+			target = target:gsub("^<", ""):gsub(">$", "")
+
+			-- External URLs continue to use the system opener.
+			if target:match("^https?://") or target:match("^mailto:") then
+				vim.ui.open(target)
+				return
+			end
+
+			-- Separate filename and fragment (heading or line number).
+			local file_part, anchor = target:match("^([^#]*)#(.*)$")
+			if not file_part then
+				file_part = target
+			end
+
+			-- Support GitHub-style line anchors: #L50 or #L50-L60
+			local line_number = anchor and anchor:match("^L(%d+)")
+			if line_number then
+				line_number = tonumber(line_number)
+			end
+			file_part = vim.uri_decode(file_part)
+			file_part = file_part:gsub("%?.*$", "")
+
+			local current_file = vim.api.nvim_buf_get_name(0)
+			local path
+
+			if file_part == "" then
+				path = current_file
+			elseif
+				vim.fn.fnamemodify(file_part, ":p") == file_part
+				or file_part:match("^%a:[/\\]")
+				or file_part:match("^[/\\][/\\]")
+			then
+				path = file_part
+			else
+				path = vim.fs.joinpath(vim.fn.fnamemodify(current_file, ":h"), file_part)
+			end
+
+			path = vim.fs.normalize(path)
+
+			if vim.fn.filereadable(path) == 0 then
+				vim.notify("Markdown file not found: " .. path, vim.log.levels.ERROR)
+				return
+			end
+
+			-- Open the destination in Neovim.
+			-- Open the destination in Neovim.
+			vim.cmd.vsplit(vim.fn.fnameescape(path))
+
+			-- Jump to a specific line if the link uses #L50.
+			if line_number then
+				local total_lines = vim.api.nvim_buf_line_count(0)
+				line_number = math.max(1, math.min(line_number, total_lines))
+
+				vim.api.nvim_win_set_cursor(0, { line_number, 0 })
+				vim.cmd.normal({ args = { "zz" }, bang = true })
+				return
+			end
+
+			-- Otherwise, jump to the matching Markdown heading.
+			if anchor and anchor ~= "" then
+				anchor = heading_slug(vim.uri_decode(anchor))
+
+				local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+
+				for i, heading_line in ipairs(lines) do
+					local heading = heading_line:match("^%s*#+%s+(.+)$")
+
+					if heading and heading_slug(heading) == anchor then
+						vim.api.nvim_win_set_cursor(0, { i, 0 })
+						vim.cmd.normal({ args = { "zz" }, bang = true })
+						return
+					end
+				end
+
+				vim.notify("Heading not found: #" .. anchor, vim.log.levels.WARN)
+			end
+			return
+		end
+
+		from = e + 1
+	end
+
+	-- No Markdown link under the cursor: use Neovim's built-in
+	-- file navigation instead of opening the target externally.
+	vim.cmd.normal({ args = { "gf" }, bang = true })
+end
+
+vim.keymap.set("n", "gx", markdown_gx, {
+	buffer = true,
+	desc = "Follow Markdown link inside Neovim",
+})
+-- Toggle Line Numbers (Visual Selection)
+function ToggleNumberVisualSelection()
+	local start_line = vim.fn.line("'<")
+	local end_line = vim.fn.line("'>")
+	local lines = vim.fn.getline(start_line, end_line)
+
+	-- Check if any line for numbering
+	local has_numbers = false
+	for i = 1, #lines do
+		if lines[i]:match("^%s*%d+%.%s") then
+			has_numbers = true
+			break
+		end
+	end
+
+	if has_numbers then
+		-- remove numbers
+		for i = 1, #lines do
+			lines[i] = lines[i]:gsub("^%s*%d+%.%s*", "")
+		end
+		print("✓ Numbers removed")
+	else
+		-- add numbers
+		for i = 1, #lines do
+			lines[i] = i .. ". " .. lines[i]
+		end
+		print("✓ Numbers added")
+	end
+
+	vim.fn.setline(start_line, lines)
+end
+
+-- Toggle Line Numbers for Current Line (Normal Mode)
+function ToggleNumberCurrentLine()
+	local line_num = vim.fn.line(".")
+	local line = vim.fn.getline(line_num)
+
+	if line:match("^%s*%d+%.%s") then
+		-- Remove number
+		line = line:gsub("^%s*%d+%.%s*", "")
+		print("✓ Number removed")
+	else
+		-- Add number
+		line = "1. " .. line
+		print("✓ Number added")
+	end
+
+	vim.fn.setline(line_num, line)
+end
+
+-- Toggle Bullet Points for (Visual Selection)
+function ToggleBulletVisualSelection()
+	local start_line = vim.fn.line("'<")
+	local end_line = vim.fn.line("'>")
+	local lines = vim.fn.getline(start_line, end_line)
+
+	-- Check if any line has bullets
+	local has_bullets = false
+	for i = 1, #lines do
+		if lines[i]:match("^%s*[%-%*%+]%s") then
+			has_bullets = true
+			break
+		end
+	end
+
+	if has_bullets then
+		-- Remove bullets
+		for i = 1, #lines do
+			lines[i] = lines[i]:gsub("^(%s*)[%-%*%+]%s*", "%1")
+		end
+		print("✓ Bullets removed")
+	else
+		-- Add bullets
+		for i = 1, #lines do
+			-- Only add bullet if line isn't already a bullet or checkbox
+			if not lines[i]:match("^%s*[%-%*%+]%s") and not lines[i]:match("^%s*%d+%.%s") then
+				lines[i] = "- " .. lines[i]
+			end
+		end
+		print("✓ Bullets added")
+	end
+
+	vim.fn.setline(start_line, lines)
+end
+
+-- Toggle Bullet Points for Current Line (Normal Mode)
+function ToggleBulletCurrentLine()
+	local line_num = vim.fn.line(".")
+	local line = vim.fn.getline(line_num)
+
+	if line:match("^%s*[%-%*%+]%s") then
+		-- Remove bullet
+		line = line:gsub("^(%s*)[%-%*%+]%s*", "%1")
+		print("✓ Bullet removed")
+	else
+		-- Add bullet
+		if not line:match("^%s*%d+%.%s") then
+			line = "- " .. line
+			print("✓ Bullet added")
+		end
+	end
+
+	vim.fn.setline(line_num, line)
+end
+
+-- Toggle Checkboxes for (Visual Selection)
+function ToggleCheckboxVisualSelection()
+	local start_line = vim.fn.line("'<")
+	local end_line = vim.fn.line("'>")
+	local lines = vim.fn.getline(start_line, end_line)
+
+	-- Check if any line has checkboxes
+	local has_checkboxes = false
+	for i = 1, #lines do
+		if lines[i]:match("^%s*%-%s*%[.%]%s") then
+			has_checkboxes = true
+			break
+		end
+	end
+
+	if has_checkboxes then
+		-- Remove checkboxes (convert back to bullets)
+		for i = 1, #lines do
+			lines[i] = lines[i]:gsub("^(%s*%-)%s*%[.%]%s*", "%1 ")
+		end
+		print("✓ Checkboxes removed")
+	else
+		-- Add checkboxes
+		for i = 1, #lines do
+			if lines[i]:match("^%s*%-%s") then
+				-- Convert existing bullet to checkbox
+				lines[i] = lines[i]:gsub("^(%s*%-)%s*", "%1 [ ] ")
+			elseif not lines[i]:match("^%s*$") then
+				-- Add checkbox with bullet to non-empty lines
+				lines[i] = "- [ ] " .. lines[i]
+			end
+		end
+		print("✓ Checkboxes added")
+	end
+
+	vim.fn.setline(start_line, lines)
+end
+
+-- Toggle Checkboxes for Current Line (Normal Mode)
+function ToggleCheckboxCurrentLine()
+	local line_num = vim.fn.line(".")
+	local line = vim.fn.getline(line_num)
+
+	if line:match("^%s*%-%s*%[.%]%s") then
+		-- Remove checkbox (convert back to bullet)
+		line = line:gsub("^(%s*%-)%s*%[.%]%s*", "%1 ")
+		print("✓ Checkbox removed")
+	else
+		-- Add checkbox
+		if line:match("^%s*%-%s") then
+			-- Convert existing bullet to checkbox
+			line = line:gsub("^(%s*%-)%s*", "%1 [ ] ")
+		elseif not line:match("^%s*$") then
+			-- Add checkbox with bullet to non-empty line
+			line = "- [ ] " .. line
+		end
+		print("✓ Checkbox added")
+	end
+
+	vim.fn.setline(line_num, line)
+end
+
+-- Toggle Task State for (Visual Selection)
+function ToggleTaskStateVisualSelection()
+	local start_line = vim.fn.line("'<")
+	local end_line = vim.fn.line("'>")
+	local lines = vim.fn.getline(start_line, end_line)
+	local changed = 0
+
+	for i = 1, #lines do
+		if lines[i]:match("^%s*%-%s*%[ %]") then
+			-- Mark as done
+			lines[i] = lines[i]:gsub("(%[) (])", "%1x%2")
+			changed = changed + 1
+		elseif lines[i]:match("^%s*%-%s*%[x%]") or lines[i]:match("^%s*%-%s*%[X%]") then
+			-- Mark as undone
+			lines[i] = lines[i]:gsub("(%[)[xX](])", "%1 %2")
+			changed = changed + 1
+		end
+	end
+
+	if changed > 0 then
+		vim.fn.setline(start_line, lines)
+		print("✓ " .. changed .. " tasks toggled")
+	else
+		print("○ No checkboxes found to toggle")
+	end
+end
+
+-- Toggle Task State for Current Line (Normal Mode)
+function ToggleTaskStateCurrentLine()
+	local line_num = vim.fn.line(".")
+	local line = vim.fn.getline(line_num)
+
+	if line:match("^%s*%-%s*%[ %]") then
+		-- Mark as done
+		line = line:gsub("(%[) (])", "%1x%2")
+		print("✓ Task completed")
+	elseif line:match("^%s*%-%s*%[x%]") or line:match("^%s*%-%s*%[X%]") then
+		-- Mark as undone
+		line = line:gsub("(%[)[xX](])", "%1 %2")
+		print("○ Task reopened")
+	else
+		print("○ No checkbox found to toggle")
+	end
+
+	vim.fn.setline(line_num, line)
+end
+
+-- Smart List Toggle for (Visual Selection)
+function SmartListToggleVisualSelection()
+	local start_line = vim.fn.line("'<")
+	local end_line = vim.fn.line("'>")
+	local lines = vim.fn.getline(start_line, end_line)
+
+	-- Determine current state
+	local has_numbers = false
+	local has_checkboxes = false
+	local has_bullets = false
+
+	for i = 1, #lines do
+		if lines[i]:match("^%s*%d+%.%s") then
+			has_numbers = true
+		elseif lines[i]:match("^%s*%-%s*%[.%]%s") then
+			has_checkboxes = true
+		elseif lines[i]:match("^%s*[%-%*%+]%s") then
+			has_bullets = true
+		end
+	end
+
+	if has_numbers then
+		-- Remove all formatting
+		for i = 1, #lines do
+			lines[i] = lines[i]:gsub("^%s*%d+%.%s*", "")
+		end
+		print("✓ All formatting removed")
+	elseif has_checkboxes then
+		-- Convert to numbers
+		for i = 1, #lines do
+			lines[i] = lines[i]:gsub("^(%s*)%-%s*%[.%]%s*", "%1")
+			if not lines[i]:match("^%s*$") then
+				lines[i] = i .. ". " .. lines[i]
+			end
+		end
+		print("✓ Converted to numbered list")
+	elseif has_bullets then
+		-- Convert to checkboxes
+		for i = 1, #lines do
+			lines[i] = lines[i]:gsub("^(%s*)[%-%*%+]%s*", "%1- [ ] ")
+		end
+		print("✓ Converted to checkboxes")
+	else
+		-- Add bullets
+		for i = 1, #lines do
+			if not lines[i]:match("^%s*$") then
+				lines[i] = "- " .. lines[i]
+			end
+		end
+		print("✓ Added bullets")
+	end
+
+	vim.fn.setline(start_line, lines)
+end
+
+-- Smart List Toggle for Current Line (Normal Mode)
+function SmartListToggleCurrentLine()
+	local line_num = vim.fn.line(".")
+	local line = vim.fn.getline(line_num)
+
+	if line:match("^%s*%d+%.%s") then
+		-- Remove all formatting
+		line = line:gsub("^%s*%d+%.%s*", "")
+		print("✓ All formatting removed")
+	elseif line:match("^%s*%-%s*%[.%]%s") then
+		-- Convert to number
+		line = line:gsub("^(%s*)%-%s*%[.%]%s*", "%1")
+		if not line:match("^%s*$") then
+			line = "1. " .. line
+		end
+		print("✓ Converted to numbered list")
+	elseif line:match("^%s*[%-%*%+]%s") then
+		-- Convert to checkbox
+		line = line:gsub("^(%s*)[%-%*%+]%s*", "%1- [ ] ")
+		print("✓ Converted to checkbox")
+	else
+		-- Add bullet
+		if not line:match("^%s*$") then
+			line = "- " .. line
+			print("✓ Added bullet")
+		end
+	end
+
+	vim.fn.setline(line_num, line)
+end
+
+-- Setting commands
+vim.api.nvim_create_user_command("ToggleNumberVisual", ToggleNumberVisualSelection, {})
+vim.api.nvim_create_user_command("ToggleBulletVisual", ToggleBulletVisualSelection, {})
+vim.api.nvim_create_user_command("ToggleCheckboxVisual", ToggleCheckboxVisualSelection, {})
+vim.api.nvim_create_user_command("ToggleTaskStateVisual", ToggleTaskStateVisualSelection, {})
+vim.api.nvim_create_user_command("SmartListToggleVisual", SmartListToggleVisualSelection, {})
+
+-- Keymaps for Bullet, Checkbox, Number list
+-- visual mode keymaps (use commands to preserve selection)
+vim.keymap.set("v", "tn", ":<C-u>ToggleNumberVisual<CR>", {
+	desc = "Toggle numbers on selected lines",
+	buffer = true,
+})
+
+vim.keymap.set("v", "tb", ":<C-u>ToggleBulletVisual<CR>", {
+	desc = "Toggle bullets on selected lines",
+	buffer = true,
+})
+
+vim.keymap.set("v", "tc", ":<C-u>ToggleCheckboxVisual<CR>", {
+	desc = "Toggle checkboxes on selected lines",
+	buffer = true,
+})
+
+vim.keymap.set("v", "tt", ":<C-u>ToggleTaskStateVisual<CR>", {
+	desc = "Toggle task state on selected lines",
+	buffer = true,
+})
+
+vim.keymap.set("v", "tl", ":<C-u>SmartListToggleVisual<CR>", {
+	desc = "Smart list toggle on selected lines",
+	buffer = true,
+})
+
+-- normal mode keymaps (call functions directly)
+vim.keymap.set("n", "tn", ToggleNumberCurrentLine, {
+	desc = "Toggle numbers on current line",
+	buffer = true,
+})
+
+vim.keymap.set("n", "tb", ToggleBulletCurrentLine, {
+	desc = "Toggle bullets on current line",
+	buffer = true,
+})
+
+vim.keymap.set("n", "tc", ToggleCheckboxCurrentLine, {
+	desc = "Toggle checkboxes on current line",
+	buffer = true,
+})
+
+vim.keymap.set("n", "tt", ToggleTaskStateCurrentLine, {
+	desc = "Toggle task state on current line",
+	buffer = true,
+})
+
+vim.keymap.set("n", "tl", SmartListToggleCurrentLine, {
+	desc = "Smart list toggle on current line",
+	buffer = true,
+})
+
+-- Task management keymaps (buffer-local)
+local opts = { buffer = 0, silent = true }
+
+-- Status message
+local function safe_markdown_cmd(cmd, success_msg)
+	return function()
+		-- undo point
+		vim.cmd("normal! t'")
+
+		-- run
+		local ok, err = pcall(vim.cmd, cmd)
+
+		if ok then
+			print("✓ " .. success_msg)
+		else
+			print("✗ Failed: " .. err)
+			-- Undo the change if it failed
+			vim.cmd("undo")
+		end
+	end
+end
+
+vim.keymap.set(
+	"n",
+	"<leader>tc",
+	safe_markdown_cmd("g/- \\[ \\]/s/\\[ \\]/[x]/", "Marked all tasks as done"),
+	vim.tbl_extend("force", opts, { desc = "Mark all tasks done" })
+)
+
+vim.keymap.set(
+	"n",
+	"<leader>tu",
+	safe_markdown_cmd("g/- \\[x\\]/s/\\[x\\]/[ ]/", "Marked all tasks as undone"),
+	vim.tbl_extend("force", opts, { desc = "Mark all tasks undone" })
+)
+
+-- Toggle headings
+local function toggle_heading(level)
+	local line = vim.api.nvim_get_current_line()
+	local cursor_pos = vim.api.nvim_win_get_cursor(0)
+
+	-- Remove existing heading
+	local content = line:gsub("^#+%s*", "")
+
+	-- Check if line already has this heading level
+	local current_level = line:match("^(#+)")
+	if current_level and #current_level == level then
+		-- Remove heading (toggle off)
+		vim.api.nvim_set_current_line(content)
+		-- Had to readjust cursor position
+		vim.api.nvim_win_set_cursor(0, { cursor_pos[1], math.max(0, cursor_pos[2] - level - 1) })
+	else
+		-- Add or change heading level
+		local new_line = string.rep("#", level) .. " " .. content
+		vim.api.nvim_set_current_line(new_line)
+		-- Adjust cursor position
+		vim.api.nvim_win_set_cursor(0, { cursor_pos[1], cursor_pos[2] + level + 1 })
+	end
+end
+
+-- Heading keymaps 1-6
+vim.keymap.set("n", "<leader>h1", function()
+	toggle_heading(1)
+end, { buffer = true, desc = "Toggle H1" })
+vim.keymap.set("n", "<leader>h2", function()
+	toggle_heading(2)
+end, { buffer = true, desc = "Toggle H2" })
+vim.keymap.set("n", "<leader>h3", function()
+	toggle_heading(3)
+end, { buffer = true, desc = "Toggle H3" })
+vim.keymap.set("n", "<leader>h4", function()
+	toggle_heading(4)
+end, { buffer = true, desc = "Toggle H4" })
+vim.keymap.set("n", "<leader>h5", function()
+	toggle_heading(5)
+end, { buffer = true, desc = "Toggle H5" })
+vim.keymap.set("n", "<leader>h6", function()
+	toggle_heading(6)
+end, { buffer = true, desc = "Toggle H6" })
+
+-- ** Header Colors **
+-- highlights for markdown files to render highlights properly
+-- thx to Linkarzu for this
+
+local color1_bg = "#ff757f"
+local color2_bg = "#4fd6be"
+local color3_bg = "#7dcfff"
+local color4_bg = "#ff9e64"
+local color5_bg = "#7aa2f7"
+local color6_bg = "#c0caf5"
+local color_fg = "#1F2335"
+
+vim.cmd(
+	string.format([[highlight @markup.heading.1.markdown cterm=bold gui=bold guifg=%s guibg=%s]], color_fg, color1_bg)
+)
+vim.cmd(
+	string.format([[highlight @markup.heading.2.markdown cterm=bold gui=bold guifg=%s guibg=%s]], color_fg, color2_bg)
+)
+vim.cmd(
+	string.format([[highlight @markup.heading.3.markdown cterm=bold gui=bold guifg=%s guibg=%s]], color_fg, color3_bg)
+)
+vim.cmd(
+	string.format([[highlight @markup.heading.4.markdown cterm=bold gui=bold guifg=%s guibg=%s]], color_fg, color4_bg)
+)
+vim.cmd(
+	string.format([[highlight @markup.heading.5.markdown cterm=bold gui=bold guifg=%s guibg=%s]], color_fg, color5_bg)
+)
+vim.cmd(
+	string.format([[highlight @markup.heading.6.markdown cterm=bold gui=bold guifg=%s guibg=%s]], color_fg, color6_bg)
+)

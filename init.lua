@@ -1,3 +1,5 @@
+--i want code for the copy paste register , to know all the copied and to selete one and paste it .
+
 vim.env.CC = "gcc"
 
 require("krish.core")
@@ -33,6 +35,18 @@ end, { desc = "Format with Conform" })
 -- vim.keymap.set({ "n", "t" }, "<C-\\>", toggle_terminal, {
 -- 	desc = "Toggle Terminal in Current Directory",
 -- })
+vim.api.nvim_set_hl(0, "Folded", {
+	bg = "NONE",
+})
+vim.api.nvim_create_autocmd("ColorScheme", {
+	callback = function()
+		vim.api.nvim_set_hl(0, "@markup.heading.1.markdown", {
+			bg = "#000000",
+			fg = "#cba6f7",
+			bold = true,
+		})
+	end,
+})
 local terminal_buf = nil
 local terminal_win = nil
 
@@ -54,3 +68,69 @@ function toggle_terminal()
 	terminal_win = vim.api.nvim_get_current_win()
 	vim.cmd("startinsert")
 end
+
+-- vim.api.nvim_create_autocmd("FileType", {
+-- 	pattern = "markdown",
+-- 	callback = function(args)
+-- 		vim.keymap.set("n", "gd", function()
+-- 			local line = vim.api.nvim_get_current_line()
+-- 			local col = vim.api.nvim_win_get_cursor(0)[2] + 1
+
+-- 			-- Find Markdown links: [text](file.md)
+-- 			for start_pos, path in line:gmatch("()%]%(([^)#]+)") do
+-- 				local link_start = start_pos - #path - 1
+-- 				local link_end = start_pos + #path + 1
+
+-- 				if col >= link_start and col <= link_end then
+-- 					local target = vim.fs.normalize(vim.fs.joinpath(vim.fn.expand("%:p:h"), path))
+
+-- 					vim.cmd("edit " .. vim.fn.fnameescape(target))
+-- 					return
+-- 				end
+-- 			end
+
+-- 			vim.lsp.buf.definition()
+-- 		end, {
+-- 			buffer = args.buf,
+-- 			desc = "Open Markdown link",
+-- 		})
+-- 	end,
+-- })
+
+local function set_wezterm_markdown_background(enabled)
+	local value = enabled and "1" or "0"
+	local encoded = vim.base64.encode(value)
+	local sequence = "\027]1337;SetUserVar=NVIM_MARKDOWN=" .. encoded .. "\007"
+
+	-- This sequence must reach WezTerm's terminal parser.
+	-- Do not use vim.notify() for this.
+	io.stdout:write(sequence)
+	io.stdout:flush()
+end
+
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = "markdown",
+	callback = function()
+		set_wezterm_markdown_background(true)
+	end,
+})
+
+vim.api.nvim_create_autocmd("FileType", {
+	pattern = "*",
+	callback = function(args)
+		if args.match ~= "markdown" then
+			set_wezterm_markdown_background(false)
+		end
+	end,
+})
+--
+-- Customize comment colors only
+vim.api.nvim_set_hl(0, "Comment", {
+	fg = "#bababa",
+	italic = true,
+})
+
+vim.api.nvim_set_hl(0, "@comment", {
+	fg = "#bababa",
+	italic = true,
+})
