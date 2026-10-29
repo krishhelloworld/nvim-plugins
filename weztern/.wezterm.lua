@@ -1,12 +1,13 @@
 local wezterm = require("wezterm")
 local config = wezterm.config_builder()
+local normal_bg = "C:/Users/gupta/Videos/2968617.jpg"
 config.enable_kitty_graphics = true
 -- Font
 config.font = wezterm.font_with_fallback({
 	"JetBrainsMono Nerd Font Mono",
 	"Symbols Nerd Font Mono",
 })
-config.font_size = 13.0
+config.font_size = 17.0
 
 --adding powershell menu
 config.launch_menu = {
@@ -22,18 +23,19 @@ config.launch_menu = {
 -- Color
 config.color_scheme = "Catppuccin Mocha"
 config.window_background_opacity = 0.98
-config.text_background_opacity = 1.0
+config.text_background_opacity = 2.9
 config.background = {
 	{
 		source = {
-			File = "C:/Users/gupta/Videos/2968617.jpg",
+			File = "C:/Users/gupta/Videos/2968618.png",
+			-- File = "",
 		},
 		width = "100%",
 		height = "100%",
 		opacity = 0.99,
 		hsb = {
-			brightness = 0.11,
-			saturation = 0.999,
+			brightness = 0.20,
+			saturation = 0.99,
 		},
 	},
 }
@@ -78,6 +80,28 @@ config.keys = {
 		action = wezterm.action.SendString("\x17"),
 	},
 }
+wezterm.on("user-var-changed", function(window, pane, name, value)
+	wezterm.log_info("Received: " .. name .. " = " .. value)
+	if name ~= "NVIM_MARKDOWN" then
+		return
+	end
+
+	local overrides = window:get_config_overrides() or {}
+
+	if value == "1" then
+		overrides.window_background_image = nil
+	else
+		overrides.window_background_image = normal_bg
+	end
+
+	overrides.window_background_image_hsb = {
+		brightness = 0.25,
+		saturation = 0.8,
+		hue = 1.0,
+	}
+
+	window:set_config_overrides(overrides)
+end)
 -- Default directory to open in terminal
 config.default_cwd = "C:/Users/gupta"
 
